@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="author" content="Hanna Bottema" />
+    
+    <link rel="shortcut icon" type="image/x-icon" href="../../img/favicon.ico">
+    <title>Project 2: Modeling, Testing, and Predicting</title>
+    <meta name="generator" content="Hugo 0.79.0" />
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+    <link rel="stylesheet" type="text/css" href="../../css/main.css" />
+    <link rel="stylesheet" type="text/css" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:200,400,200bold,400old" />
+    
+    <!--[if lt IE 9]>
+			<script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+			<script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+		<![endif]-->
+
+    
+  </head>
+
+  <body>
+    <div id="wrap">
+      
+      <nav class="navbar navbar-default">
+  <div class="container">
+    <div class="navbar-header">
+      <a class="navbar-brand" href="../../"><i class="fa fa-home"></i></a>
+      <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#navbar">
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+    </div>
+    <div class="navbar-collapse collapse" id="navbar">
+      <ul class="nav navbar-nav navbar-right">
+      
+        
+        <li><a href="../../post/">BLOG</a></li>
+        
+        <li><a href="../../projects/">PROJECTS</a></li>
+        
+        <li><a href="../../resume/">RESUME</a></li>
+        
+      
+      </ul>
+    </div>
+  </div>
+</nav>
+
+      <div class="container">
+        <div class="blog-post">
+          <h3>
+            <strong><a href="../../project/project2/">Project 2: Modeling, Testing, and Predicting</a></strong>
+          </h3>
+        </div>
+ 
+<div class="blog-title">
+          <h4>
+         January 1, 0001 
+            &nbsp;&nbsp;
+            
+          </h4>
+        </div>
+
+        <div class="panel panel-default">
+          <div class="panel-body">
+            <div class="blogpost">
+              
+
+
+<pre class="r"><code>library(readr)
+library(dplyr)
+library(ggplot2)
+library(rstatix)
+library(sandwich)
+library(lmtest)
+library(plotROC)
+library(glmnet)
+
+class_diag&lt;-function(probs,truth){
+  tab&lt;-table(factor(probs&gt;.5,levels=c(&quot;FALSE&quot;,&quot;TRUE&quot;)),truth)
+  acc=sum(diag(tab))/sum(tab)
+  sens=tab[2,2]/colSums(tab)[2]
+  spec=tab[1,1]/colSums(tab)[1]
+  ppv=tab[2,2]/rowSums(tab)[2]
+  f1=2*(sens*ppv)/(sens+ppv)
+
+  if(is.numeric(truth)==FALSE &amp; is.logical(truth)==FALSE){
+    truth&lt;-as.numeric(truth)-1}
+  
+  #CALCULATE EXACT AUC
+  ord&lt;-order(probs, decreasing=TRUE)
+  probs &lt;- probs[ord]; truth &lt;- truth[ord]
+  
+  TPR=cumsum(truth)/max(1,sum(truth)) 
+  FPR=cumsum(!truth)/max(1,sum(!truth))
+  
+  dup&lt;-c(probs[-1]&gt;=probs[-length(probs)], FALSE)
+  TPR&lt;-c(0,TPR[!dup],1); FPR&lt;-c(0,FPR[!dup],1)
+  
+  n &lt;- length(TPR)
+  auc&lt;- sum( ((TPR[-1]+TPR[-n])/2) * (FPR[-1]-FPR[-n]) )
+
+  data.frame(acc,sens,spec,ppv,f1,auc)
+}
+
+lawschool &lt;- read_csv(&quot;lawschool.csv&quot;)
+head(lawschool)</code></pre>
+<pre><code>## # A tibble: 6 x 8
+## LSAT GPA Race resident college Year Gender admit
+## &lt;dbl&gt; &lt;dbl&gt; &lt;chr&gt; &lt;dbl&gt; &lt;chr&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;
+## 1 156 3.71 White 0 Arizona State 2006 0 1
+## 2 161 3.85 White 0 Arizona State 2006 0 1
+## 3 160 3.2 White 0 Arizona State 2006 1 0
+## 4 132 2.95 &lt;NA&gt; 1 Arizona State 2006 1 0
+## 5 159 3.49 White 0 Arizona State 2006 1 0
+## 6 154 2.81 White 0 Arizona State 2006 1 0</code></pre>
+<pre class="r"><code>LS &lt;- lawschool %&gt;% mutate(resident = recode(resident, &quot;0&quot; = &quot;No&quot;, &quot;1&quot; = &quot;Yes&quot; )) 
+LS &lt;- LS %&gt;% mutate(Gender = recode(Gender, &quot;0&quot; = &quot;female&quot;, &quot;1&quot; = &quot;male&quot; ))
+LS &lt;- LS %&gt;% mutate(admit = recode(admit, &quot;0&quot; = &quot;denied&quot;, &quot;1&quot; = &quot;admitted&quot; ))
+LS &lt;- LS %&gt;% na.omit()
+
+LS %&gt;% group_by(college) %&gt;% count()</code></pre>
+<pre><code>## # A tibble: 13 x 2
+## # Groups:   college [13]
+##    college                     n
+##    &lt;chr&gt;                   &lt;int&gt;
+##  1 Arizona State            4755
+##  2 Buffalo                  2404
+##  3 George Mason             9900
+##  4 Hawaii                   1191
+##  5 Houston                  6174
+##  6 Idaho                    1194
+##  7 Louisiana State          2272
+##  8 Michigan                 8998
+##  9 Missouri at Kansas City  2209
+## 10 Nevada Las Vegas         3381
+## 11 North Carolina           6258
+## 12 Northern Illinois        3318
+## 13 Ohio State               3765</code></pre>
+<div id="introduction" class="section level2">
+<h2>Introduction</h2>
+<div id="the-dataset-ls-was-acquired-from-project-seaphe-and-contains-the-variables-lsat-gpa-race-resident-college-year-gender-and-admit-for-55819-law-school-applicants-across-13-different-public-universities.-lsat-represents-standardized-test-scores-on-a-scale-from-120-180.-gpa-is-indicative-of-undergraduate-grades-on-a-4.0-scale.-resident-shows-whether-a-student-is-in-state-or-out-of-state.-admit-represents-whether-or-not-a-student-was-admitted-into-the-specified-college.-the-overall-purpose-of-analyzing-this-dataset-is-to-determine-the-significance-and-effects-of-qualitative-and-quantitative-variables-on-admission-into-law-school." class="section level5">
+<h5>The dataset &quot;LS&quot; was acquired from Project SEAPHE and contains the variables LSAT, GPA, Race, Resident, College, Year, Gender, and Admit for 55,819 law school applicants across 13 different public universities. LSAT represents standardized test scores on a scale from 120-180. GPA is indicative of undergraduate grades on a 4.0 scale. Resident shows whether a student is in-state or out-of-state. Admit represents whether or not a student was admitted into the specified college. The overall purpose of analyzing this dataset is to determine the significance and effects of qualitative and quantitative variables on admission into law school.</h5>
+</div>
+</div>
+<div id="manova-testing" class="section level2">
+<h2>MANOVA Testing</h2>
+<pre class="r"><code>#ASSUMPTIONS
+LS_samp&lt;-LS%&gt;%sample_n(4999)
+group &lt;- LS_samp$Race 
+DVs &lt;- LS_samp %&gt;% select(LSAT,GPA)
+sapply(split(DVs,group), mshapiro_test)</code></pre>
+<pre><code>##           Asian       Black     Hispanic  White       
+## statistic 0.9923673   0.9975165 0.9974485 0.9913578   
+## p.value   0.004324142 0.7122528 0.8155908 7.302301e-14</code></pre>
+<p><em>When testing for normality within each group, all racial identifications had p-values less than 0.05; therefore, the multivariate normality assumption is not satisfied.</em></p>
+<pre class="r"><code>#TESTS
+LSmanova &lt;- manova(cbind(LSAT,GPA)~Race,data=LS)
+summary(LSmanova) #1 MANOVA</code></pre>
+<pre><code>## Df Pillai approx F num Df den Df Pr(&gt;F)
+## Race 3 0.13221 1316.9 6 111630 &lt; 2.2e-16 ***
+## Residuals 55815
+## ---
+## Signif. codes: 0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1
+&#39; &#39; 1</code></pre>
+<pre class="r"><code>summary.aov(LSmanova) #2 ANOVAS</code></pre>
+<pre><code>## Response LSAT :
+## Df Sum Sq Mean Sq F value Pr(&gt;F)
+## Race 3 468246 156082 2489.5 &lt; 2.2e-16 ***
+## Residuals 55815 3499399 63
+## ---
+## Signif. codes: 0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1
+&#39; &#39; 1
+##
+## Response GPA :
+## Df Sum Sq Mean Sq F value Pr(&gt;F)
+## Race 3 513.7 171.237 994.67 &lt; 2.2e-16 ***
+## Residuals 55815 9608.9 0.172
+## ---
+## Signif. codes: 0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1
+&#39; &#39; 1</code></pre>
+<pre class="r"><code>pairwise.t.test(LS$LSAT,LS$Race, p.adj=&quot;none&quot;) #12 t-tests</code></pre>
+<pre><code>## 
+##  Pairwise comparisons using t tests with pooled SD 
+## 
+## data:  LS$LSAT and LS$Race 
+## 
+##          Asian   Black   Hispanic
+## Black    &lt; 2e-16 -       -       
+## Hispanic &lt; 2e-16 &lt; 2e-16 -       
+## White    3.9e-10 &lt; 2e-16 &lt; 2e-16 
+## 
+## P value adjustment method: none</code></pre>
+<pre class="r"><code>pairwise.t.test(LS$GPA,LS$Race, p.adj=&quot;none&quot;)</code></pre>
+<pre><code>## 
+##  Pairwise comparisons using t tests with pooled SD 
+## 
+## data:  LS$GPA and LS$Race 
+## 
+##          Asian   Black   Hispanic
+## Black    &lt; 2e-16 -       -       
+## Hispanic 5.2e-15 &lt; 2e-16 -       
+## White    &lt; 2e-16 &lt; 2e-16 &lt; 2e-16 
+## 
+## P value adjustment method: none</code></pre>
+<pre class="r"><code>1 - (0.95^15)</code></pre>
+<pre><code>## [1] 0.5367088</code></pre>
+<pre class="r"><code>.05/15</code></pre>
+<pre><code>## [1] 0.003333333</code></pre>
+<p><em>The overall MANOVA test yields a p-value less than 0.05; therefore, for at least one numeric variable, the mean differs for at least one racial identification.</em></p>
+<p><em>For both variables, at least one mean for racial identification differs as indicated by low p-values (p &lt;0.05).</em></p>
+<p><em>15 tests were completed in total, and the probability at least one Type 1 error occurred is 0.537. The boneferroni adjusted significance level is 0.00333. Using this adjusted alpha value, all racial identifications have significant differences in GPA and LSAT means. </em></p>
+</div>
+<div id="randomization-test" class="section level2">
+<h2>Randomization Test</h2>
+<pre class="r"><code>t.test(GPA ~ Gender, data = LS, var.equal = F)</code></pre>
+<pre><code>##
+## Welch Two Sample t-test
+##
+## data: GPA by Gender
+## t = 22.423, df = 53741, p-value &lt; 2.2e-16
+## alternative hypothesis: true difference in means is not
+equal to 0
+## 95 percent confidence interval:
+## 0.07356164 0.08765357
+## sample estimates:
+## mean in group female mean in group male
+## 3.366822 3.286214</code></pre>
+<pre class="r"><code>set.seed(348)
+
+LS%&gt;%group_by(Gender)%&gt;%
+  summarize(GPAmeans=mean(GPA))%&gt;%summarize(`mean_diff`=diff(GPAmeans))</code></pre>
+<pre><code>## # A tibble: 1 x 1
+##   mean_diff
+##       &lt;dbl&gt;
+## 1   -0.0806</code></pre>
+<pre class="r"><code>GPAGender &lt;- vector()
+for(i in 1:1000){
+GPArand&lt;-data.frame(GPA=sample(LS$GPA),Gender=LS$Gender) 
+GPAGender[i]&lt;-mean(GPArand[GPArand$Gender==&quot;male&quot;,]$GPA)-   
+              mean(GPArand[GPArand$Gender==&quot;female&quot;,]$GPA)}
+
+mean(GPAGender&gt; 0.08060761      | GPAGender &lt; -0.08060761   )</code></pre>
+<pre><code>## [1] 0</code></pre>
+<pre class="r"><code>vertical.lines &lt;- c(0.08060761, -0.08060761)
+
+wrapper &lt;- function(x, ...) 
+{paste(strwrap(x, ...), collapse = &quot;\n&quot;)}
+
+my_title_manual = &quot;Mean Differences in GPA between Randomized Groups of Male and Female Applicants&quot;
+
+GG &lt;- GPAGender %&gt;% as.data.frame()
+ggplot(GG,aes(x = .)) + geom_histogram() + labs(title =wrapper(my_title_manual,50), x = &quot;Mean Differences in GPA&quot;, y = &quot;Frequencies&quot;) + theme(plot.title = element_text(hjust = 0.5)) +geom_vline(xintercept = vertical.lines, color=&quot;red&quot;)</code></pre>
+<p><img src="../../project/project2_files/figure-html/unnamed-chunk-4-1.png" width="768" style="display: block; margin: auto;" /> <em>The null hypothesis states the mean difference in GPA values between male and female applicants is 0. The alternative hypothesis states the mean difference in GPA values between male and female applicants is not equal to 0.</em></p>
+<p><em>The resulting p-value of the randomization test is 0. Therefore, we reject the null hypothesis and assume the mean difference between male and female applicants is not equal to 0. A p-value of exactly 0 indicates 1000 randomized calculations of the test statistic did not result in a mean difference as large as the one observed as the overall mean difference in GPA between male and female applicants.</em></p>
+</div>
+<div id="linear-regression-model" class="section level2">
+<h2>Linear Regression Model</h2>
+<pre class="r"><code>#TEST
+LS$GPA_c &lt;- LS$GPA - mean(LS$GPA)
+LSfit &lt;- lm(LSAT ~ GPA_c*Gender, data = LS)
+summary(LSfit)</code></pre>
+<pre><code>##
+## Call:
+## lm(formula = LSAT ~ GPA_c * Gender, data = LS)
+##
+## Residuals:
+## Min 1Q Median 3Q Max
+## -33.973 -5.108 0.135 5.386 32.899
+##
+## Coefficients:
+## Estimate Std. Error t value Pr(&gt;|t|)
+## (Intercept) 154.09876 0.04990 3087.89 &lt;2e-16 ***
+## GPA_c 8.52478 0.12024 70.90 &lt;2e-16 ***
+## Gendermale 2.62958 0.06658 39.50 &lt;2e-16 ***
+## GPA_c:Gendermale -2.13717 0.15736 -13.58 &lt;2e-16 ***
+## ---
+## Signif. codes: 0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1
+&#39; &#39; 1
+##
+## Residual standard error: 7.769 on 55815 degrees of
+freedom
+## Multiple R-squared: 0.1508, Adjusted R-squared: 0.1508
+## F-statistic: 3305 on 3 and 55815 DF, p-value: &lt; 2.2e-16</code></pre>
+<p><em>154.099 is the predicted LSAT score for a female applicant with an average GPA. When controlling for Gender, for every one unit increase in GPA, there is an 8.525 point increase in LSAT score, on average. Male applicants with average GPAs have predicted LSAT scores that are 2.629 points greater than female applicants with average GPAs. The slope of GPA on LSAT score for male applicants is 2.137 less than for female applicants.</em></p>
+<pre class="r"><code>#ASSUMPTIONS
+#HOMOSKEDASTICITY
+bptest(LSfit)</code></pre>
+<pre><code>## 
+##  studentized Breusch-Pagan test
+## 
+## data:  LSfit
+## BP = 190.62, df = 3, p-value &lt; 2.2e-16</code></pre>
+<pre class="r"><code>#NORMALITY
+LSresids&lt;-LSfit$residuals
+ks.test(LSresids, &quot;pnorm&quot;, mean=0, sd(LSresids))</code></pre>
+<pre><code>## 
+##  One-sample Kolmogorov-Smirnov test
+## 
+## data:  LSresids
+## D = 0.0081771, p-value = 0.001146
+## alternative hypothesis: two-sided</code></pre>
+<pre class="r"><code>#LINEARITY
+LS_samp2&lt;-LS%&gt;%sample_n(1000)
+LSresids2&lt;-lm(LSAT ~ GPA_c*Gender, data = LS_samp2)$residuals
+LSfitted2&lt;-lm(LSAT ~ GPA_c*Gender, data = LS_samp2)$fitted.values
+ggplot()+geom_point(aes(LSfitted2,LSresids2))+geom_hline(yintercept=0, color=&#39;red&#39;) + labs(title = &quot;Fitted Values and Residuals for 1000 Applicants&quot;, x = &quot;Fitted Values&quot;, y = &quot;Residuals&quot;) + theme(plot.title = element_text(hjust = 0.5))</code></pre>
+<p><img src="../../project/project2_files/figure-html/unnamed-chunk-6-1.png" width="768" style="display: block; margin: auto;" /></p>
+<p><em>The homoskedasticity assumption is violated as demonstrated by the low p-value result of the Breush-Pagan test. The normality assumption is violated due to the low p-value yielded by the Kolmogorov-Smirnov test. The linearity assumption is fulfilled due to the random scattering of points presented in the graph of fitted values and residuals of a random subset of 1000 applicants. Due to the failure of the dataset to meet all assumptions, the subsequent linear regression analysis does not fully and accurately describe the dataset.</em></p>
+<pre class="r"><code>#RECALCULATION WITH ROBUST SEs
+coeftest(LSfit, vcov = vcovHC(LSfit))</code></pre>
+<pre><code>##
+## t test of coefficients:
+##
+## Estimate Std. Error t value Pr(&gt;|t|)
+## (Intercept) 154.098761 0.050371 3059.298 &lt; 2.2e-16 ***
+## GPA_c 8.524780 0.123717 68.906 &lt; 2.2e-16 ***
+## Gendermale 2.629579 0.066563 39.505 &lt; 2.2e-16 ***
+## GPA_c:Gendermale -2.137169 0.164097 -13.024 &lt; 2.2e-16
+***
+## ---
+## Signif. codes: 0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1
+&#39; &#39; 1</code></pre>
+<pre class="r"><code>#GRAPHS
+ggplot(LS, aes(x=GPA, y=LSAT,group=Gender))+geom_point(aes(color=Gender), size = 0.7)+
+geom_smooth(method=&quot;lm&quot;,aes(color = Gender))+ labs(title = &quot;Linear Regression of GPA and Gender on LSAT Scores&quot;) + theme(plot.title = element_text(hjust = 0.5))</code></pre>
+<p><img src="../../project/project2_files/figure-html/unnamed-chunk-7-1.png" width="768" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>ggplot(LS, aes(x=GPA, y=LSAT,group=Gender))+
+geom_smooth(method=&quot;lm&quot;,aes(color = Gender)) + labs(title = &quot;Isolated Linear Regression Lines&quot;) + theme(plot.title = element_text(hjust = 0.5))</code></pre>
+<p><img src="../../project/project2_files/figure-html/unnamed-chunk-7-2.png" width="768" style="display: block; margin: auto;" /></p>
+<p><em>When recomputing regression results with robust standard errors, all estimates remained the same in value and significance. The robust SEs increased in value for all variables except Gendermale, which decreased slightly. All estimates have p-values less than 0.05; therefore, Gender, GPA, and their interaction explain a significant amount of variation in LSAT scores. 15.08% of variation in LSAT scores can be explained by variation in Gender and GPA.</em></p>
+</div>
+<div id="bootstrapped-se-model" class="section level2">
+<h2>Bootstrapped SE Model</h2>
+<pre class="r"><code>summary(LSfit)</code></pre>
+<pre><code>##
+## Call:
+## lm(formula = LSAT ~ GPA_c * Gender, data = LS)
+##
+## Residuals:
+## Min 1Q Median 3Q Max
+## -33.973 -5.108 0.135 5.386 32.899
+##
+## Coefficients:
+## Estimate Std. Error t value Pr(&gt;|t|)
+## (Intercept) 154.09876 0.04990 3087.89 &lt;2e-16 ***
+## GPA_c 8.52478 0.12024 70.90 &lt;2e-16 ***
+## Gendermale 2.62958 0.06658 39.50 &lt;2e-16 ***
+## GPA_c:Gendermale -2.13717 0.15736 -13.58 &lt;2e-16 ***
+## ---
+## Signif. codes: 0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1
+&#39; &#39; 1
+##
+## Residual standard error: 7.769 on 55815 degrees of
+freedom
+## Multiple R-squared: 0.1508, Adjusted R-squared: 0.1508
+## F-statistic: 3305 on 3 and 55815 DF, p-value: &lt; 2.2e-16</code></pre>
+<pre class="r"><code>coeftest(LSfit, vcov = vcovHC(LSfit))</code></pre>
+<pre><code>##
+## t test of coefficients:
+##
+## Estimate Std. Error t value Pr(&gt;|t|)
+## (Intercept) 154.098761 0.050371 3059.298 &lt; 2.2e-16 ***
+## GPA_c 8.524780 0.123717 68.906 &lt; 2.2e-16 ***
+## Gendermale 2.629579 0.066563 39.505 &lt; 2.2e-16 ***
+## GPA_c:Gendermale -2.137169 0.164097 -13.024 &lt; 2.2e-16
+***
+## ---
+## Signif. codes: 0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1
+&#39; &#39; 1</code></pre>
+<pre class="r"><code>LSsamp_distn&lt;-replicate(1000, {
+LSboot_dat &lt;- sample_frac(LS, replace=T) 
+LSbootfit &lt;- lm(LSAT ~ GPA_c*Gender, data = LSboot_dat) 
+coef(LSbootfit) 
+})
+
+LSsamp_distn %&gt;% t %&gt;% as.data.frame %&gt;% summarize_all(sd)</code></pre>
+<pre><code>##   (Intercept)     GPA_c Gendermale GPA_c:Gendermale
+## 1  0.05045635 0.1207803 0.06604807        0.1629774</code></pre>
+<p><em>In comparison to the original SEs, the bootstrapped SEs for intercept (SE = 0.0508), the interaction between GPA and Gender male (SE = 0.166), and mean-centered GPA (SE = 0.122) are greater. However, the SE for Gender male (SE = 0.0662) is less than the SE value for the original linear regression.</em></p>
+<p><em>In comparison to robust SEs, the bootstrapped SEs for intercept, mean-centered GPA, and the interaction between GPA and Gender male are greater in value. The bootstrapped SE for Gendermale is less.</em></p>
+</div>
+<div id="logistic-regression-with-two-explanatory-variables" class="section level2">
+<h2>Logistic Regression with Two Explanatory Variables</h2>
+<pre class="r"><code>LS1 &lt;- LS %&gt;% mutate(BinaryAdmit=ifelse(admit==&quot;admitted&quot;,1,0))
+LSLR &lt;- glm(BinaryAdmit ~ Gender + GPA, data = LS1, family = binomial)
+summary(LSLR)</code></pre>
+<pre><code>##
+## Call:
+## glm(formula = BinaryAdmit ~ Gender + GPA, family =
+binomial,
+## data = LS1)
+##
+## Deviance Residuals:
+## Min 1Q Median 3Q Max
+## -1.3206 -0.8063 -0.5965 -0.2488 2.7266
+##
+## Coefficients:
+## Estimate Std. Error z value Pr(&gt;|z|)
+## (Intercept) -7.2627 0.1045 -69.481 &lt; 2e-16 ***
+## Gendermale 0.1015 0.0207 4.904 9.37e-07 ***
+## GPA 1.7880 0.0295 60.613 &lt; 2e-16 ***
+## ---
+## Signif. codes: 0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1
+&#39; &#39; 1
+##
+## (Dispersion parameter for binomial family taken to be 1)
+##
+## Null deviance: 62113 on 55818 degrees of freedom
+## Residual deviance: 57651 on 55816 degrees of freedom
+## AIC: 57657
+##
+## Number of Fisher Scoring iterations: 4</code></pre>
+<pre class="r"><code>exp(coef(LSLR))</code></pre>
+<pre><code>##  (Intercept)   Gendermale          GPA 
+## 0.0007011891 1.1068291867 5.9773937003</code></pre>
+<p><em>The odds of admission for a female applicant with a GPA of 0 is 0.000701. Controlling for GPA, the odds of admission for male applicants is 1.107 times the odds of admission for female applicants. Controlling for Gender, every one unit increase in GPA increases odds of admission by 5.977.</em></p>
+<pre class="r"><code>LSprob&lt;-predict(LSLR,type=&quot;response&quot;)
+LSpred&lt;-ifelse(LSprob&gt;.5,1,0)
+table(prediction=LSpred, truth=LS$admit)%&gt;%addmargins</code></pre>
+<pre><code>##           truth
+## prediction admitted denied   Sum
+##        0      13512  42072 55584
+##        1        144     91   235
+##        Sum    13656  42163 55819</code></pre>
+<pre class="r"><code>class_diag(LSprob, LS1$BinaryAdmit)</code></pre>
+<pre><code>## acc sens spec ppv f1 auc
+## 1 0.7563016 0.01054482 0.9978417 0.612766 0.02073285
+0.684861</code></pre>
+<pre class="r"><code>LS1$logit&lt;-predict(LSLR,type=&quot;link&quot;)
+
+LS1%&gt;%ggplot()+geom_density(aes(logit,color=admit,fill=admit), alpha=.4)+ theme(legend.position=c(.85,.85))+geom_vline(xintercept=0)+xlab(&quot;predictor (logit)&quot;) + labs(title = &quot;Density Plot of Logit Grouped by Admission Status&quot;, x = &quot;Logit&quot;, y = &quot;Density&quot;) + theme(plot.title = element_text(hjust = 0.5))</code></pre>
+<p><img src="../../project/project2_files/figure-html/unnamed-chunk-10-1.png" width="768" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>LSROCplot &lt;- ggplot(LS1)+geom_roc(aes(d=BinaryAdmit,m=LSprob), n.cuts=0) + labs(title = &quot;ROC Curve&quot;, x = &quot;False Positive Fraction&quot;, y = &quot;True Positive Fraction&quot;) + theme(plot.title = element_text(hjust = 0.5))
+LSROCplot</code></pre>
+<p><img src="../../project/project2_files/figure-html/unnamed-chunk-10-2.png" width="768" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>calc_auc(LSROCplot)</code></pre>
+<pre><code>##   PANEL group      AUC
+## 1     1    -1 0.684861</code></pre>
+<p><em>The accuracy, or proportion of correctly classified admissions, is 0.756. The sensitivity, or proportion of admitted students correctly classified as admitted, is 0.0105. The specificity, or proportion of denied students correctly classified as denied, is 0.998. The PPV, or proportion of students classified as admitted who actually were admitted, is 0.613. The AUC is 0.685; therefore, Gender and GPA, alone, are poor predictors of the admission status of applicants.</em></p>
+</div>
+<div id="logistic-regression-with-all-variables" class="section level2">
+<h2>Logistic Regression with All Variables</h2>
+<pre class="r"><code>LS2&lt;-LS1%&gt;%select(-logit,-Year, -admit, -college)
+LSfit2 &lt;- glm(BinaryAdmit~(.), data = LS2, family = &quot;binomial&quot;)
+LSprob2 &lt;- predict(LSfit2, type = &quot;response&quot;)
+class_diag(LSprob2, LS2$BinaryAdmit)</code></pre>
+<pre><code>## acc sens spec ppv f1 auc
+## 1 0.7984916 0.384007 0.9327372 0.6490099 0.4825175
+0.8105803</code></pre>
+<p><em>For the logistic regression model with all variables and their interactions, the accuracy, or proportion of correctly classified admissions, is 0.798. The sensitivity, or proportion of admitted students correctly classified as admitted, is 0.384. The specificity, or proportion of denied students correctly classified as denied, is 0.933. The PPV, or proportion of students classified as admitted who actually were admitted, is 0.649. The AUC is 0.811; therefore, the logistic model containing all variables is good at predicting admission status of applicants.</em></p>
+<pre class="r"><code>k=10
+LS2data&lt;-LS2[sample(nrow(LS2)),] 
+folds&lt;-cut(seq(1:nrow(LS2)),breaks=k,labels=F)
+diags&lt;-NULL
+for(i in 1:k){
+  train&lt;-LS2data[folds!=i,] 
+  test&lt;-LS2data[folds==i,]
+  
+  truth&lt;-test$BinaryAdmit 
+  
+  fit&lt;-glm(BinaryAdmit~(.)^2,data=train,family=&quot;binomial&quot;)
+  
+  probs&lt;-predict(fit,newdata = test,type=&quot;response&quot;)
+  
+  diags&lt;-rbind(diags,class_diag(probs,truth))
+}
+summarize_all(diags,mean)</code></pre>
+<pre><code>## acc sens spec ppv f1 auc
+## 1 0.799459 0.3736711 0.9373598 0.6588298 0.4768349
+0.8156088</code></pre>
+<p><em>For a 10-fold CV with the same logistic regression model, the AUC is 0.815, which is slightly greater than the AUC of 0.811 of the original model. Sensitivity of the 10-fold model is slightly less than the initial model. All other diagnostics are slight greater than the initial model. Overall, the out-of-sample metrics deviate slightly, but the AUC value indicates the model does not show signs of overfitting and is good at predicting admission status on data outside of the sample.</em></p>
+<pre class="r"><code>#LASSO
+
+LSy&lt;-as.matrix(LS2$BinaryAdmit) 
+LSx&lt;-model.matrix(BinaryAdmit~.,data=LS2)[,-1]
+LSx &lt;- scale(LSx)
+LScv &lt;- cv.glmnet(LSx,LSy, family=&quot;binomial&quot;)
+LSlasso&lt;-glmnet(LSx,LSy,family=&quot;binomial&quot;,lambda=LScv$lambda.1se)
+coef(LSlasso)</code></pre>
+<pre><code>## 9 x 1 sparse Matrix of class &quot;dgCMatrix&quot;
+##                       s0
+## (Intercept)  -1.48352038
+## LSAT          1.08378326
+## GPA           0.41713405
+## RaceBlack     0.25038533
+## RaceHispanic  0.09953187
+## RaceWhite     .         
+## residentYes   0.53991654
+## Gendermale    .         
+## GPA_c         0.10097188</code></pre>
+<pre class="r"><code>LS3 &lt;- LS2 %&gt;% mutate(Black=ifelse(LS2$Race==&quot;Black&quot;,1,0),Hispanic=ifelse(LS2$Race==&quot;Hispanic&quot;,1,0),Female=ifelse(LS2$Gender==&quot;female&quot;,1,0), Resident =ifelse(LS2$resident==&quot;Yes&quot;,1,0),Asian=ifelse(LS2$Race==&quot;Asian&quot;,1,0))
+
+#CROSS-VALIDATION
+k=10
+
+LS3data&lt;-LS3[sample(nrow(LS3)),] 
+folds&lt;-cut(seq(1:nrow(LS3)),breaks=k,labels=F) 
+
+diags&lt;-NULL
+for(i in 1:k){
+  train&lt;-LS3data[folds!=i,] 
+  test&lt;-LS3data[folds==i,]
+  truth&lt;-test$BinaryAdmit
+  
+  LS3fit&lt;-glm(BinaryAdmit~LSAT+GPA+Black+Hispanic+Resident,data=train,family=&quot;binomial&quot;)
+  
+  probs&lt;-predict(LS3fit,newdata = test,type=&quot;response&quot;)
+  
+  diags&lt;-rbind(diags,class_diag(probs,truth))
+}
+
+diags%&gt;%summarize_all(mean)</code></pre>
+<pre><code>## acc sens spec ppv f1 auc
+## 1 0.7984738 0.3832779 0.9329102 0.6492137 0.4819549
+0.8104017</code></pre>
+<p><em>After performing LASSO on the logistic regression model, all variables were deemed predictive of admission status except for RaceWhite and Gendermale. After performing a 10-fold CV on LASSO variables, the resulting AUC is 0.810 which is slightly less than the initial logistic regression AUC 0.811 and the same as the non-LASSO, 10-fold CV regression model.</em></p>
+<p>...</p>
+</div>
+
+            
+        <hr>         <div class="related-posts">
+                <h5>Related Posts</h5>
+                
+              </div> 
+            </div>
+          </div>
+
+   <hr>  <div class="disqus">
+  <div id="disqus_thread"></div>
+  <script type="text/javascript">
+
+    (function() {
+      
+      
+      if (window.location.hostname == "localhost")
+        return;
+
+      var disqus_shortname = '';
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+  </script>
+  <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+  <a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</div> 
+        </div>
+      </div>
+    </div>
+
+    
+    <footer>
+  <div id="footer">
+    <div class="container">
+      <p class="text-muted">&copy; All rights reserved. Powered by <a href="https://gohugo.io/">Hugo</a> and
+      <a href="http://www.github.com/nurlansu/hugo-sustain/">sustain</a> with ♥</p>
+    </div>
+  </div>
+</footer>
+<div class="footer"></div>
+
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+<script src="../../js/docs.min.js"></script>
+<script src="../../js/main.js"></script>
+
+<script src="../../js/ie10-viewport-bug-workaround.js"></script>
+
+
+    
+  </body>
+</html>

@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="author" content="Hanna Bottema" />
+    
+    <link rel="shortcut icon" type="image/x-icon" href="../../img/favicon.ico">
+    <title>Project 1: Exploratory Data Analysis</title>
+    <meta name="generator" content="Hugo 0.79.0" />
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+    <link rel="stylesheet" type="text/css" href="../../css/main.css" />
+    <link rel="stylesheet" type="text/css" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:200,400,200bold,400old" />
+    
+    <!--[if lt IE 9]>
+			<script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+			<script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+		<![endif]-->
+
+    
+  </head>
+
+  <body>
+    <div id="wrap">
+      
+      <nav class="navbar navbar-default">
+  <div class="container">
+    <div class="navbar-header">
+      <a class="navbar-brand" href="../../"><i class="fa fa-home"></i></a>
+      <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#navbar">
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+    </div>
+    <div class="navbar-collapse collapse" id="navbar">
+      <ul class="nav navbar-nav navbar-right">
+      
+        
+        <li><a href="../../post/">BLOG</a></li>
+        
+        <li><a href="../../projects/">PROJECTS</a></li>
+        
+        <li><a href="../../resume/">RESUME</a></li>
+        
+      
+      </ul>
+    </div>
+  </div>
+</nav>
+
+      <div class="container">
+        <div class="blog-post">
+          <h3>
+            <strong><a href="../../project/project1/">Project 1: Exploratory Data Analysis</a></strong>
+          </h3>
+        </div>
+ 
+<div class="blog-title">
+          <h4>
+         January 1, 0001 
+            &nbsp;&nbsp;
+            
+          </h4>
+        </div>
+
+        <div class="panel panel-default">
+          <div class="panel-body">
+            <div class="blogpost">
+              
+
+
+<div id="introduction" class="section level3">
+<h3>Introduction</h3>
+<div id="the-purpose-of-this-project-is-to-compare-movies-based-on-their-qualitative-and-quantitative-variables.-the-dataset-movieratings-was-acquired-from-the-internet-movie-database-imdb-and-contains-the-variables-company-country-name-rating-runtime-score-votes-and-year-for-6820-different-films.-the-dataset-moviebudget-was-drawn-from-the-kaggle-dataset-the-movies-dataset.-the-author-compiled-budget-original_title-revenue-runtime-status-and-title-information-from-tmdb-and-grouplens-for-45466-distinct-movies." class="section level5">
+<h5>The purpose of this project is to compare movies based on their qualitative and quantitative variables. The dataset &quot;MovieRatings&quot; was acquired from the Internet Movie Database (IMDb) and contains the variables company, country, name, rating, runtime, score, votes, and year for 6,820 different films. The dataset &quot;MovieBudget&quot; was drawn from the Kaggle dataset &quot;The Movies Dataset&quot;. The author compiled budget, original_title, revenue, runtime, status, and title information from TMDB and GroupLens for 45,466 distinct movies.</h5>
+</div>
+<div id="the-datasets-were-chosen-and-compiled-for-analysis-of-budget-and-revenue-in-comparison-to-genre-and-ratings.-personally-i-am-an-avid-user-of-imdb-and-am-interested-in-how-the-aforementioned-variables-may-be-correlated-to-explain-trends-among-types-of-movies.-i-hypothesize-genres-such-as-animation-and-action-will-yield-higher-budgets-due-to-higher-production-costs.-furthermore-budget-and-revenue-may-demonstrate-a-relatively-high-correlation-due-to-allocation-of-costs-to-marketing-and-subsequently-greater-viewership-yielding-a-higher-revenue.-overall-the-following-analysis-will-aim-to-display-relationships-between-quantitative-variables-and-varying-subsets-of-qualitative-variables." class="section level5">
+<h5>The datasets were chosen and compiled for analysis of budget and revenue in comparison to genre and ratings. Personally, I am an avid user of IMDb and am interested in how the aforementioned variables may be correlated to explain trends among types of movies. I hypothesize genres, such as Animation and Action, will yield higher budgets due to higher production costs. Furthermore, budget and revenue may demonstrate a relatively high correlation due to allocation of costs to marketing and subsequently greater viewership, yielding a higher revenue. Overall, the following analysis will aim to display relationships between quantitative variables and varying subsets of qualitative variables.</h5>
+</div>
+</div>
+<div id="joining" class="section level3">
+<h3>Joining</h3>
+<pre class="r"><code>library(tidyverse)
+library(readr)
+library(dplyr)
+library(ggplot2)
+options(scipen = 99)
+
+MovieBudget &lt;- read_csv(&quot;MovieBudget.csv&quot;)
+
+MovieRatings &lt;- read_csv(&quot;MovieRatings.csv&quot;)
+
+MovieJoin &lt;- MovieBudget %&gt;% distinct(title, .keep_all = T) %&gt;% 
+    rename(name = title) %&gt;% right_join(MovieRatings, by = &quot;name&quot;)
+
+MovieJoin2 &lt;- MovieJoin %&gt;% select(-runtime.x)
+MovieJoin2 &lt;- MovieJoin2 %&gt;% select(-status)
+MovieJoin2 &lt;- MovieJoin2 %&gt;% select(-original_title)
+MovieJoin2 &lt;- MovieJoin2 %&gt;% na.omit
+MovieJoin2 &lt;- MovieJoin2 %&gt;% select(-popularity)
+
+MovieJoin3 &lt;- MovieJoin2 %&gt;% filter(!revenue == 0 &amp; !budget == 
+    0)
+MovieJoin3 &lt;- MovieJoin3 %&gt;% filter(budget &gt;= &quot;1000&quot;)
+MovieJoin3 &lt;- MovieJoin3 %&gt;% filter(revenue &gt;= &quot;1000&quot;)
+
+&quot;%ni%&quot; &lt;- Negate(&quot;%in%&quot;)
+MovieJoin3 %&gt;% group_by(genre) %&gt;% count() %&gt;% arrange(n)</code></pre>
+<pre><code>## # A tibble: 14 x 2
+## # Groups:   genre [14]
+##    genre         n
+##    &lt;chr&gt;     &lt;int&gt;
+##  1 Thriller      1
+##  2 Family        3
+##  3 Romance       4
+##  4 Sci-Fi        8
+##  5 Fantasy      18
+##  6 Mystery      21
+##  7 Horror      143
+##  8 Biography   174
+##  9 Animation   187
+## 10 Adventure   209
+## 11 Crime       243
+## 12 Drama       557
+## 13 Action      841
+## 14 Comedy      869</code></pre>
+<pre class="r"><code>GenreMJ &lt;- MovieJoin3 %&gt;% filter(genre %ni% c(&quot;Thriller&quot;, &quot;Family&quot;, 
+    &quot;Romance&quot;, &quot;Sci-Fi&quot;, &quot;Fantasy&quot;, &quot;Mystery&quot;))</code></pre>
+<p><em>I used a right-join to combine the MovieBudget and MovieRatings datasets into MovieJoin to preserve all variables. The MovieRatings dataset had significantly fewer observations, so I used a right-join by movie name to eliminate rows in MovieBudget that were not present in MovieRatings. The right-join eliminated 38,646 observations to form a combined dataset with 6,820 observations.</em></p>
+<p><em>After joining, I removed extraneous, repetitive variables along with rows containing NA values. I also removed movies with low revenue and budget values that were falsely reported-- for example, movies with budgets of 1 dollar. Lastly, I removed movies categorized into genres with small overall counts. The final dataset, GenreMJ, contains 3223 observation and 11 variables. The removal of observations limits the scope of the project analysis and is not representative of all movies on IMDb; however, these measures were taken to simplify important variables of study within this project: budget, revenue, and genre.</em></p>
+</div>
+<div id="wrangling" class="section level3">
+<h3>Wrangling</h3>
+<pre class="r"><code>GenreMJ %&gt;% summarise_if(is.numeric, mean)</code></pre>
+<pre><code>## # A tibble: 1 x 6
+##      budget    revenue runtime.y score   votes  year
+##       &lt;dbl&gt;      &lt;dbl&gt;     &lt;dbl&gt; &lt;dbl&gt;   &lt;dbl&gt; &lt;dbl&gt;
+## 1 39731977. 116100005.      109.  6.48 118164. 2004.</code></pre>
+<pre class="r"><code>GenreMJ %&gt;% summarise_if(is.numeric, sd)</code></pre>
+<pre><code>## # A tibble: 1 x 6
+##      budget    revenue runtime.y score   votes  year
+##       &lt;dbl&gt;      &lt;dbl&gt;     &lt;dbl&gt; &lt;dbl&gt;   &lt;dbl&gt; &lt;dbl&gt;
+## 1 43231380. 186534215.      18.8 0.995 166122.  8.30</code></pre>
+<p><em>The mean budget for movies in the dataset is 39,731,977 dollars, and the mean revenue is 116,100,005 dollars. The mean runtime is 109.362 minutes, and the mean user-given score is 6.478. The mean number of votes given by IMDb users for each movie is 118164.3, and the mean year in which movies were created is 2004.</em></p>
+<p><em>The standard deviation (sd) in budget for movies in the joined dataset is 43,231,380 dollars, and the sd in revenue is 186,534,215 dollars. The sd in runtime is 18.82 minutes, and the user-given scores have an sd of 0.995. The number of votes on IMDb for movies deviated by 166,121.7, and the years in which movies were created deviated by 8.30.</em></p>
+<pre class="r"><code>GenreMJ %&gt;% filter(score == max(score)) %&gt;% select(name)</code></pre>
+<pre><code>## # A tibble: 1 x 1
+##   name                    
+##   &lt;chr&gt;                   
+## 1 The Shawshank Redemption</code></pre>
+<pre class="r"><code>GenreMJ %&gt;% group_by(genre) %&gt;% summarise(mscore = mean(score)) %&gt;% 
+    arrange(desc(mscore))</code></pre>
+<pre><code>## # A tibble: 8 x 2
+##   genre     mscore
+##   &lt;chr&gt;      &lt;dbl&gt;
+## 1 Biography   7.16
+## 2 Crime       6.95
+## 3 Drama       6.84
+## 4 Animation   6.79
+## 5 Adventure   6.56
+## 6 Action      6.24
+## 7 Comedy      6.23
+## 8 Horror      5.79</code></pre>
+<pre class="r"><code>GenreMJ %&gt;% group_by(rating, country) %&gt;% summarise(ms = mean(score)) %&gt;% 
+    arrange(desc(ms))</code></pre>
+<pre><code>## # A tibble: 102 x 3
+## # Groups:   rating [8]
+##    rating    country         ms
+##    &lt;chr&gt;     &lt;chr&gt;        &lt;dbl&gt;
+##  1 UNRATED   India         8.7 
+##  2 PG-13     Italy         8.6 
+##  3 PG        Iran          8.4 
+##  4 R         Brazil        8.35
+##  5 PG-13     India         8.2 
+##  6 R         Argentina     8.2 
+##  7 NOT RATED South Korea   8.1 
+##  8 PG-13     West Germany  8.1 
+##  9 NOT RATED India         8.07
+## 10 PG        India         8   
+## # … with 92 more rows</code></pre>
+<p><em>The movie with the highest score based on IMDb user votes was Shawshank Redemption, which a score of 9.3. When grouped by genre, Biographies has the highest mean score of 7.16, and Horror has the lowest mean score of 5.80. When grouped by both country and rating, Unrated movies from India have the highest mean score of 8.7, and PG-13 movies from South Korea have the lowest mean score of 3.6.</em></p>
+<pre class="r"><code>GenreMJ %&gt;% group_by(genre) %&gt;% summarise(mr = mean(revenue)) %&gt;% 
+    arrange((mr))</code></pre>
+<pre><code>## # A tibble: 8 x 2
+##   genre             mr
+##   &lt;chr&gt;          &lt;dbl&gt;
+## 1 Crime      59253394.
+## 2 Horror     60597699.
+## 3 Drama      67272070.
+## 4 Biography  71136717.
+## 5 Comedy     71246150.
+## 6 Action    174082771.
+## 7 Adventure 191004154.
+## 8 Animation 283644685.</code></pre>
+<pre class="r"><code>GenreMJ %&gt;% mutate(net = revenue - budget) %&gt;% filter(net == 
+    max(net)) %&gt;% select(name)</code></pre>
+<pre><code>## # A tibble: 1 x 1
+##   name  
+##   &lt;chr&gt; 
+## 1 Avatar</code></pre>
+<p><em>The movie genre with the greatest mean revenue is Animation and the lowest is Crime. The film with the greatest net profit, the difference between revenue and budget, is Avatar.</em></p>
+<pre class="r"><code>GenreMJ %&gt;% select(country) %&gt;% count(country) %&gt;% arrange(desc(n))</code></pre>
+<pre><code>## # A tibble: 39 x 2
+##    country       n
+##    &lt;chr&gt;     &lt;int&gt;
+##  1 USA        2649
+##  2 UK          285
+##  3 France       65
+##  4 Germany      37
+##  5 Canada       30
+##  6 India        18
+##  7 Spain        17
+##  8 Australia    16
+##  9 Japan        16
+## 10 Ireland      12
+## # … with 29 more rows</code></pre>
+<pre class="r"><code>GenreMJ %&gt;% group_by(genre) %&gt;% summarise(mrt = mean(runtime.y)) %&gt;% 
+    arrange(desc(mrt))</code></pre>
+<pre><code>## # A tibble: 8 x 2
+##   genre       mrt
+##   &lt;chr&gt;     &lt;dbl&gt;
+## 1 Biography 123. 
+## 2 Drama     116. 
+## 3 Crime     115. 
+## 4 Adventure 115. 
+## 5 Action    112. 
+## 6 Comedy    103. 
+## 7 Horror     97.3
+## 8 Animation  92.2</code></pre>
+<pre class="r"><code>GenreMJ %&gt;% group_by(country) %&gt;% summarise(mv = mean(votes)) %&gt;% 
+    arrange(desc(mv))</code></pre>
+<pre><code>## # A tibble: 39 x 2
+##    country           mv
+##    &lt;chr&gt;          &lt;dbl&gt;
+##  1 New Zealand  528358.
+##  2 Brazil       305391 
+##  3 South Africa 194639 
+##  4 Argentina    149747 
+##  5 Sweden       141918.
+##  6 China        137917.
+##  7 Spain        124429.
+##  8 USA          121716.
+##  9 UK           114764.
+## 10 Australia    105586.
+## # … with 29 more rows</code></pre>
+<p><em>The most represented country in the dataset is the USA, which accounts for 2649 of the observations. Animation films have, on average, the lowest runtimes while Biographies have the highest mean runtime. When grouped by country, movies from New Zealand have the highest mean number of votes on IMDb.</em></p>
+</div>
+<div id="pivoting" class="section level3">
+<h3>Pivoting</h3>
+<pre class="r"><code>GenreMJ %&gt;% group_by(genre) %&gt;% summarise_if(is.numeric, c(mean, 
+    sd, var, min, max)) %&gt;% pivot_longer(contains(&quot;_&quot;)) %&gt;% separate(name, 
+    sep = &quot;_&quot;, into = c(&quot;variable&quot;, &quot;summarystat&quot;)) %&gt;% pivot_wider(names_from = &quot;variable&quot;, 
+    values_from = &quot;value&quot;) %&gt;% mutate(summarystat = recode(summarystat, 
+    fn1 = &quot;mean&quot;, fn2 = &quot;sd&quot;, fn3 = &quot;var&quot;, fn4 = &quot;min&quot;, fn5 = &quot;max&quot;))</code></pre>
+<pre><code>## # A tibble: 40 x 8
+##    genre     summarystat  budget revenue runtime.y score        votes    year
+##    &lt;chr&gt;     &lt;chr&gt;         &lt;dbl&gt;   &lt;dbl&gt;     &lt;dbl&gt; &lt;dbl&gt;        &lt;dbl&gt;   &lt;dbl&gt;
+##  1 Action    mean        6.38e 7 1.74e 8     112.  6.24       151843. 2003.  
+##  2 Action    sd          5.59e 7 2.47e 8      17.4 0.976      187747.    8.59
+##  3 Action    var         3.12e15 6.09e16     304.  0.952 35249069440.   73.9 
+##  4 Action    min         7.00e 0 5.00e 0      75   2             368  1986   
+##  5 Action    max         3.80e 8 2.79e 9     187   9         1839571  2016   
+##  6 Adventure mean        5.20e 7 1.91e 8     115.  6.56       164592. 2004.  
+##  7 Adventure sd          5.30e 7 2.75e 8      24.2 1.09       222285.    8.79
+##  8 Adventure var         2.81e15 7.57e16     585.  1.18  49410579449.   77.3 
+##  9 Adventure min         1.30e 5 3.06e 4      79   2.3           703  1986   
+## 10 Adventure max         2.50e 8 1.34e 9     224   8.9       1352483  2016   
+## # … with 30 more rows</code></pre>
+<p><em>Pivoting was used to tidy summary statistics across different genres. First, the data was pivoted longer to combine row names into a single column. Once in a single column, the row names were separated into a variable column and a summary statistic column-- containing mean, sd, var, min, and max identifiers. Once separated, the variable column was pivoted wider to create columns that pertained to each-- a budget column, a revenue column, etc. The summary statistic column was then recoded to the correct summary statistic name instead of the identifier.</em></p>
+<p><em>The final organized data contains 3 rows per genre. Each row shows either mean, sd, var, min, or max values for each variable.</em></p>
+</div>
+<div id="visualizing" class="section level3">
+<h3>Visualizing</h3>
+<pre class="r"><code>MJCor &lt;- MovieJoin3 %&gt;% na.omit %&gt;% select_if(is.numeric)
+
+MJCorrelation &lt;- MJCor %&gt;% cor
+
+MJC &lt;- MJCorrelation %&gt;% as.data.frame() %&gt;% rownames_to_column(&quot;var1&quot;) %&gt;% 
+    pivot_longer(-1, names_to = &quot;var2&quot;, values_to = &quot;correlation&quot;)
+
+MJC %&gt;% ggplot(aes(var1, var2, fill = correlation)) + geom_tile() + 
+    labs(x = &quot;Variable 1&quot;, y = &quot;Variable 2&quot;) + ggtitle(&quot;Correlation Plot of Numeric Variables in GenreMJ&quot;) + 
+    scale_fill_gradient2(high = &quot;dark green&quot;) + theme(plot.title = element_text(hjust = 0.5)) + 
+    geom_text(aes(label = round(correlation, 2)), color = &quot;black&quot;, 
+        size = 2)</code></pre>
+<p><img src="../../project/project1_files/figure-html/unnamed-chunk-7-1.png" width="672" style="display: block; margin: auto;" /></p>
+<p><em>In the correlation heatmap, the highest correlation value between two different variables is 0.72 between budget and revenue. A higher budget corresponds to a higher revenue, according to the dataset. The lowest correlation value is between year and score, with a value of 0.03. This indicates the score given to a movie is not impacted by the year in which it was made.</em></p>
+<pre class="r"><code>options(scipen = 2)
+
+ggplot(GenreMJ, aes(budget, revenue, color = genre)) + scale_color_brewer(palette = &quot;Dark2&quot;) + 
+    ggtitle(&quot;Scatterplots of Budget versus Revenue Faceted by Genre&quot;) + 
+    labs(x = &quot;Budget&quot;, y = &quot;Revenue&quot;) + theme(legend.position = &quot;none&quot;, 
+    plot.title = element_text(hjust = 0.5)) + geom_point(size = 0.1) + 
+    facet_wrap(~genre)</code></pre>
+<p><img src="../../project/project1_files/figure-html/unnamed-chunk-8-1.png" width="672" style="display: block; margin: auto;" /></p>
+<p><em>All of the above plots demonstrate positive relationships in which movies with higher budgets have higher revenues. The least spread is shown by the Horror genre, and the most spread is present in the Action genre. The plots for Biography, Comedy, Crime, Drama, and Horror show insignificant deviation from the origin. In fact, many data points have higher budget values than revenue values which results in a negative profit. The Action movie plot has the highest revenue and budget values.</em></p>
+<pre class="r"><code>GenreMJ1 &lt;- GenreMJ %&gt;% mutate(net = revenue - budget)
+MeanScores &lt;- GenreMJ1 %&gt;% group_by(genre) %&gt;% summarise(meanscore = mean(score), 
+    meannet = mean(net)) %&gt;% mutate(meanscore = round(meanscore, 
+    2))
+
+ggplot(GenreMJ1, aes(x = genre, y = net, fill = genre)) + geom_bar(stat = &quot;summary&quot;, 
+    fun = mean, position = &quot;dodge&quot;) + scale_fill_brewer(palette = &quot;Spectral&quot;) + 
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), 
+        legend.position = &quot;none&quot;, plot.title = element_text(hjust = 0.5)) + 
+    scale_y_continuous(breaks = seq(0, 2e+08, 25000000)) + geom_text(data = MeanScores, 
+    aes(y = meannet, label = meanscore), vjust = 1.5) + ggtitle(&quot;Average Net Profit by Genre and Mean Score&quot;) + 
+    labs(x = &quot;Genre&quot;, y = &quot;Net Profit&quot;)</code></pre>
+<p><img src="../../project/project1_files/figure-html/unnamed-chunk-9-1.png" width="672" style="display: block; margin: auto;" /> <em>Animation films have the greatest average net profit, and Crime movies have the smallest average net profit. According to the plot, the average score of each genre is not indicative of greater average net profit. The highest average score belongs to Biography movies; however, this genre has a low net profit. Genres with higher net profits-- Action, Adventure, and Animation -- have scores that are close to the mean of all movies in the dataset.</em></p>
+</div>
+<div id="pam-clustering---numeric-variables" class="section level3">
+<h3>PAM Clustering - Numeric Variables</h3>
+<pre class="r"><code>MJNum &lt;- GenreMJ %&gt;% select(budget, revenue, runtime.y, score)
+library(cluster)
+
+MJsil_width &lt;- vector()
+
+for (i in 2:10) {
+    kms &lt;- kmeans(MJNum, centers = i)
+    sil &lt;- silhouette(kms$cluster, dist(MJNum))
+    MJsil_width[i] &lt;- mean(sil[, 3])
+}
+
+ggplot() + geom_line(aes(x = 1:10, y = MJsil_width)) + scale_x_continuous(name = &quot;k&quot;, 
+    breaks = 1:10) + ggtitle(&quot;K versus Average Silhouette Widths&quot;) + 
+    theme(plot.title = element_text(hjust = 0.5)) + labs(x = &quot;K Values&quot;, 
+    y = &quot;Average Silhouette Widths&quot;)</code></pre>
+<p><img src="../../project/project1_files/figure-html/unnamed-chunk-10-1.png" width="672" style="display: block; margin: auto;" /> <em>The subset MJNum contains all numeric variables, except for year, that will be used for PAM clustering. Silhouettes are measurements used to determine how well values fit into clusters and to estimate cluster distances. The graph represents cluster options on the x-axis and silhouette widths on the y-axis. A larger sil_width is indicative of better clustering; therefore, 2 clusters should be used for the subsequent analysis.</em></p>
+<pre class="r"><code>MJPam &lt;- MJNum %&gt;% scale() %&gt;% pam(k = 2)
+
+MJpamclust &lt;- MJNum %&gt;% mutate(cluster = as.factor(MJPam$clustering))
+MJpamclust %&gt;% group_by(cluster) %&gt;% summarize_if(is.numeric, 
+    mean, na.rm = T)</code></pre>
+<pre><code>## # A tibble: 2 x 5
+##   cluster    budget    revenue runtime.y score
+##   &lt;fct&gt;       &lt;dbl&gt;      &lt;dbl&gt;     &lt;dbl&gt; &lt;dbl&gt;
+## 1 1       59059552. 196940570.     123.   7.11
+## 2 2       24490865.  52351702.      98.5  5.98</code></pre>
+<pre class="r"><code>MJpamclust %&gt;% ggplot(aes(x = budget, y = revenue, color = cluster)) + 
+    geom_point() + ggtitle(&quot;Scatterplot of Budget and Revenue Colored by Cluster&quot;) + 
+    theme(plot.title = element_text(hjust = 0.5)) + labs(x = &quot;Budget&quot;, 
+    y = &quot;Revenue&quot;)</code></pre>
+<p><img src="../../project/project1_files/figure-html/unnamed-chunk-11-1.png" width="672" style="display: block; margin: auto;" /></p>
+<p><em>Pam Clustering is shown above to divide the numeric variables into two clusters. When clustering is added as a variable and used to group, it is apparent by the means of the numeric variables that cluster 1 represent higher means of budget, revenue, runtime, and score. When visualized as a scatterplot, the clustering division is not apparent.</em></p>
+<pre class="r"><code>library(GGally)
+MJNum %&gt;% mutate(cluster = as.factor(MJPam$clustering)) %&gt;% ggpairs(columns = c(&quot;budget&quot;, 
+    &quot;revenue&quot;, &quot;runtime.y&quot;, &quot;score&quot;), aes(color = cluster))</code></pre>
+<p><img src="../../project/project1_files/figure-html/unnamed-chunk-12-1.png" width="672" style="display: block; margin: auto;" /></p>
+<p><em>Based on the correlation values above, budget and revenue have the highest, positive correlation value of 0.723. Every other combination of variables have positive correlation values, but the values are insignificant and less than 0.5.</em></p>
+<pre class="r"><code>MJPam$silinfo$avg.width</code></pre>
+<pre><code>## [1] 0.2786367</code></pre>
+<p><em>The average silhouette width is 0.279 which is intepreted as a weak structure that could be artificial. Therefore, the final fit of the cluster solution does not properly separate the data.</em></p>
+</div>
+
+            
+        <hr>         <div class="related-posts">
+                <h5>Related Posts</h5>
+                
+              </div> 
+            </div>
+          </div>
+
+   <hr>  <div class="disqus">
+  <div id="disqus_thread"></div>
+  <script type="text/javascript">
+
+    (function() {
+      
+      
+      if (window.location.hostname == "localhost")
+        return;
+
+      var disqus_shortname = '';
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+  </script>
+  <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+  <a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</div> 
+        </div>
+      </div>
+    </div>
+
+    
+    <footer>
+  <div id="footer">
+    <div class="container">
+      <p class="text-muted">&copy; All rights reserved. Powered by <a href="https://gohugo.io/">Hugo</a> and
+      <a href="http://www.github.com/nurlansu/hugo-sustain/">sustain</a> with ♥</p>
+    </div>
+  </div>
+</footer>
+<div class="footer"></div>
+
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+<script src="../../js/docs.min.js"></script>
+<script src="../../js/main.js"></script>
+
+<script src="../../js/ie10-viewport-bug-workaround.js"></script>
+
+
+    
+  </body>
+</html>

@@ -1,0 +1,308 @@
+---
+title: 'Project 2: Modeling, Testing, and Predicting'
+author: "SDS348"
+date: ''
+output:
+  html_document:
+    toc: yes
+    toc_float:
+      collapsed: no
+      smooth_scroll: yes
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+hook_output = knit_hooks$get('output')
+knit_hooks$set(output = function(x, options) {
+  # this hook is used only when the linewidth option is not NULL
+  if (!is.null(n <- options$linewidth)) {
+    x = knitr:::split_lines(x)
+    # any lines wider than n should be wrapped
+    if (any(nchar(x) > n)) x = strwrap(x, width = n)
+    x = paste(x, collapse = '\n')
+  }
+  hook_output(x, options)
+})
+
+knitr::opts_chunk$set(echo = TRUE, eval = TRUE,fig.align="center",warning=FALSE,message=FALSE,fig.width=8, fig.height=5, linewidth=60)
+options(tibble.width = 100,width = 100)
+library(tidyverse)
+```
+
+```{R}
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(rstatix)
+library(sandwich)
+library(lmtest)
+library(plotROC)
+library(glmnet)
+
+class_diag<-function(probs,truth){
+  tab<-table(factor(probs>.5,levels=c("FALSE","TRUE")),truth)
+  acc=sum(diag(tab))/sum(tab)
+  sens=tab[2,2]/colSums(tab)[2]
+  spec=tab[1,1]/colSums(tab)[1]
+  ppv=tab[2,2]/rowSums(tab)[2]
+  f1=2*(sens*ppv)/(sens+ppv)
+
+  if(is.numeric(truth)==FALSE & is.logical(truth)==FALSE){
+    truth<-as.numeric(truth)-1}
+  
+  #CALCULATE EXACT AUC
+  ord<-order(probs, decreasing=TRUE)
+  probs <- probs[ord]; truth <- truth[ord]
+  
+  TPR=cumsum(truth)/max(1,sum(truth)) 
+  FPR=cumsum(!truth)/max(1,sum(!truth))
+  
+  dup<-c(probs[-1]>=probs[-length(probs)], FALSE)
+  TPR<-c(0,TPR[!dup],1); FPR<-c(0,FPR[!dup],1)
+  
+  n <- length(TPR)
+  auc<- sum( ((TPR[-1]+TPR[-n])/2) * (FPR[-1]-FPR[-n]) )
+
+  data.frame(acc,sens,spec,ppv,f1,auc)
+}
+
+lawschool <- read_csv("lawschool.csv")
+head(lawschool)
+
+LS <- lawschool %>% mutate(resident = recode(resident, "0" = "No", "1" = "Yes" )) 
+LS <- LS %>% mutate(Gender = recode(Gender, "0" = "female", "1" = "male" ))
+LS <- LS %>% mutate(admit = recode(admit, "0" = "denied", "1" = "admitted" ))
+LS <- LS %>% na.omit()
+
+LS %>% group_by(college) %>% count()
+```
+
+##Introduction
+
+##### The dataset "LS" was acquired from Project SEAPHE and contains the variables LSAT, GPA, Race, Resident, College, Year, Gender, and Admit for 55,819 law school applicants across 13 different public universities. LSAT represents standardized test scores on a scale from 120-180. GPA is indicative of undergraduate grades on a 4.0 scale. Resident shows whether a student is in-state or out-of-state. Admit represents whether or not a student was admitted into the specified college. The overall purpose of analyzing this dataset is to determine the significance and effects of qualitative and quantitative variables on admission into law school.
+
+## MANOVA Testing
+
+```{R}
+#ASSUMPTIONS
+LS_samp<-LS%>%sample_n(4999)
+group <- LS_samp$Race 
+DVs <- LS_samp %>% select(LSAT,GPA)
+sapply(split(DVs,group), mshapiro_test)
+```
+
+*When testing for normality within each group, all racial identifications had p-values less than 0.05; therefore, the multivariate normality assumption is not satisfied.*
+
+```{R}
+#TESTS
+LSmanova <- manova(cbind(LSAT,GPA)~Race,data=LS)
+summary(LSmanova) #1 MANOVA
+
+summary.aov(LSmanova) #2 ANOVAS
+
+pairwise.t.test(LS$LSAT,LS$Race, p.adj="none") #12 t-tests
+pairwise.t.test(LS$GPA,LS$Race, p.adj="none")
+
+1 - (0.95^15)
+
+.05/15
+```
+
+*The overall MANOVA test yields a p-value less than 0.05; therefore, for at least one numeric variable, the mean differs for at least one racial identification.*
+
+*For both variables, at least one mean for racial identification differs as indicated by low p-values (p <0.05).*
+
+*15 tests were completed in total, and the probability at least one Type 1 error occurred is 0.537. The boneferroni adjusted significance level is 0.00333. Using this adjusted alpha value, all racial identifications have significant differences in GPA and LSAT means. *
+
+## Randomization Test
+
+```{R}
+t.test(GPA ~ Gender, data = LS, var.equal = F)
+
+set.seed(348)
+
+LS%>%group_by(Gender)%>%
+  summarize(GPAmeans=mean(GPA))%>%summarize(`mean_diff`=diff(GPAmeans))
+
+GPAGender <- vector()
+for(i in 1:1000){
+GPArand<-data.frame(GPA=sample(LS$GPA),Gender=LS$Gender) 
+GPAGender[i]<-mean(GPArand[GPArand$Gender=="male",]$GPA)-   
+              mean(GPArand[GPArand$Gender=="female",]$GPA)}
+
+mean(GPAGender> 0.08060761		| GPAGender < -0.08060761	)
+
+vertical.lines <- c(0.08060761, -0.08060761)
+
+wrapper <- function(x, ...) 
+{paste(strwrap(x, ...), collapse = "\n")}
+
+my_title_manual = "Mean Differences in GPA between Randomized Groups of Male and Female Applicants"
+
+GG <- GPAGender %>% as.data.frame()
+ggplot(GG,aes(x = .)) + geom_histogram() + labs(title =wrapper(my_title_manual,50), x = "Mean Differences in GPA", y = "Frequencies") + theme(plot.title = element_text(hjust = 0.5)) +geom_vline(xintercept = vertical.lines, color="red")
+
+```
+*The null hypothesis states the mean difference in GPA values between male and female applicants is 0. The alternative hypothesis states the mean difference in GPA values between male and female applicants is not equal to 0.*
+
+*The resulting p-value of the randomization test is 0. Therefore, we reject the null hypothesis and assume the mean difference between male and female applicants is not equal to 0. A p-value of exactly 0 indicates 1000 randomized calculations of the test statistic did not result in a mean difference as large as the one observed as the overall mean difference in GPA between male and female applicants.*
+
+## Linear Regression Model
+
+```{R}
+#TEST
+LS$GPA_c <- LS$GPA - mean(LS$GPA)
+LSfit <- lm(LSAT ~ GPA_c*Gender, data = LS)
+summary(LSfit)
+```
+
+*154.099 is the predicted LSAT score for a female applicant with an average GPA. When controlling for Gender, for every one unit increase in GPA, there is an 8.525 point increase in LSAT score, on average. Male applicants with average GPAs have predicted LSAT scores that are 2.629 points greater than female applicants with average GPAs. The slope of GPA on LSAT score for male applicants is 2.137 less than for female applicants.*
+
+```{R}
+#ASSUMPTIONS
+#HOMOSKEDASTICITY
+bptest(LSfit)
+
+#NORMALITY
+LSresids<-LSfit$residuals
+ks.test(LSresids, "pnorm", mean=0, sd(LSresids))
+
+#LINEARITY
+LS_samp2<-LS%>%sample_n(1000)
+LSresids2<-lm(LSAT ~ GPA_c*Gender, data = LS_samp2)$residuals
+LSfitted2<-lm(LSAT ~ GPA_c*Gender, data = LS_samp2)$fitted.values
+ggplot()+geom_point(aes(LSfitted2,LSresids2))+geom_hline(yintercept=0, color='red') + labs(title = "Fitted Values and Residuals for 1000 Applicants", x = "Fitted Values", y = "Residuals") + theme(plot.title = element_text(hjust = 0.5))
+```
+
+*The homoskedasticity assumption is violated as demonstrated by the low p-value result of the Breush-Pagan test. The normality assumption is violated due to the low p-value yielded by the Kolmogorov-Smirnov test. The linearity assumption is fulfilled due to the random scattering of points presented in the graph of fitted values and residuals of a random subset of 1000 applicants. Due to the failure of the dataset to meet all assumptions, the subsequent linear regression analysis does not fully and accurately describe the dataset.*
+
+```{R}
+#RECALCULATION WITH ROBUST SEs
+coeftest(LSfit, vcov = vcovHC(LSfit))
+
+#GRAPHS
+ggplot(LS, aes(x=GPA, y=LSAT,group=Gender))+geom_point(aes(color=Gender), size = 0.7)+
+geom_smooth(method="lm",aes(color = Gender))+ labs(title = "Linear Regression of GPA and Gender on LSAT Scores") + theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(LS, aes(x=GPA, y=LSAT,group=Gender))+
+geom_smooth(method="lm",aes(color = Gender)) + labs(title = "Isolated Linear Regression Lines") + theme(plot.title = element_text(hjust = 0.5))
+```
+
+*When recomputing regression results with robust standard errors, all estimates remained the same in value and significance. The robust SEs increased in value for all variables except Gendermale, which decreased slightly. All estimates have p-values less than 0.05; therefore, Gender, GPA, and their interaction explain a significant amount of variation in LSAT scores. 15.08% of variation in LSAT scores can be explained by variation in Gender and GPA.*
+
+## Bootstrapped SE Model
+
+```{R}
+summary(LSfit)
+coeftest(LSfit, vcov = vcovHC(LSfit))
+LSsamp_distn<-replicate(1000, {
+LSboot_dat <- sample_frac(LS, replace=T) 
+LSbootfit <- lm(LSAT ~ GPA_c*Gender, data = LSboot_dat) 
+coef(LSbootfit) 
+})
+
+LSsamp_distn %>% t %>% as.data.frame %>% summarize_all(sd)
+```
+*In comparison to the original SEs, the bootstrapped SEs for intercept (SE = 0.0508), the interaction between GPA and Gender male (SE = 0.166), and mean-centered GPA (SE = 0.122) are greater. However, the SE for Gender male (SE = 0.0662) is less than the SE value for the original linear regression.*
+
+*In comparison to robust SEs, the bootstrapped SEs for intercept, mean-centered GPA, and the interaction between GPA and Gender male are greater in value. The bootstrapped SE for Gendermale is less.*
+
+## Logistic Regression with Two Explanatory Variables
+
+```{R}
+LS1 <- LS %>% mutate(BinaryAdmit=ifelse(admit=="admitted",1,0))
+LSLR <- glm(BinaryAdmit ~ Gender + GPA, data = LS1, family = binomial)
+summary(LSLR)
+exp(coef(LSLR))
+```
+
+*The odds of admission for a female applicant with a GPA of 0 is 0.000701. Controlling for GPA, the odds of admission for male applicants is 1.107 times the odds of admission for female applicants. Controlling for Gender, every one unit increase in GPA increases odds of admission by 5.977.*
+
+```{R}
+LSprob<-predict(LSLR,type="response")
+LSpred<-ifelse(LSprob>.5,1,0)
+table(prediction=LSpred, truth=LS$admit)%>%addmargins
+class_diag(LSprob, LS1$BinaryAdmit)
+
+LS1$logit<-predict(LSLR,type="link")
+
+LS1%>%ggplot()+geom_density(aes(logit,color=admit,fill=admit), alpha=.4)+ theme(legend.position=c(.85,.85))+geom_vline(xintercept=0)+xlab("predictor (logit)") + labs(title = "Density Plot of Logit Grouped by Admission Status", x = "Logit", y = "Density") + theme(plot.title = element_text(hjust = 0.5))
+
+LSROCplot <- ggplot(LS1)+geom_roc(aes(d=BinaryAdmit,m=LSprob), n.cuts=0) + labs(title = "ROC Curve", x = "False Positive Fraction", y = "True Positive Fraction") + theme(plot.title = element_text(hjust = 0.5))
+LSROCplot
+
+calc_auc(LSROCplot)
+```
+
+*The accuracy, or proportion of correctly classified admissions, is 0.756. The sensitivity, or proportion of admitted students correctly classified as admitted, is 0.0105. The specificity, or proportion of denied students correctly classified as denied, is 0.998. The PPV, or proportion of students classified as admitted who actually were admitted, is 0.613. The AUC is 0.685; therefore, Gender and GPA, alone, are poor predictors of the admission status of applicants.*
+
+## Logistic Regression with All Variables
+
+```{R}
+LS2<-LS1%>%select(-logit,-Year, -admit, -college)
+LSfit2 <- glm(BinaryAdmit~(.), data = LS2, family = "binomial")
+LSprob2 <- predict(LSfit2, type = "response")
+class_diag(LSprob2, LS2$BinaryAdmit)
+```
+
+*For the logistic regression model with all variables and their interactions, the accuracy, or proportion of correctly classified admissions, is 0.798. The sensitivity, or proportion of admitted students correctly classified as admitted, is 0.384. The specificity, or proportion of denied students correctly classified as denied, is 0.933. The PPV, or proportion of students classified as admitted who actually were admitted, is 0.649. The AUC is 0.811; therefore, the logistic model containing all variables is good at predicting admission status of applicants.*
+
+```{R}
+k=10
+LS2data<-LS2[sample(nrow(LS2)),] 
+folds<-cut(seq(1:nrow(LS2)),breaks=k,labels=F)
+diags<-NULL
+for(i in 1:k){
+  train<-LS2data[folds!=i,] 
+  test<-LS2data[folds==i,]
+  
+  truth<-test$BinaryAdmit 
+  
+  fit<-glm(BinaryAdmit~(.)^2,data=train,family="binomial")
+  
+  probs<-predict(fit,newdata = test,type="response")
+  
+  diags<-rbind(diags,class_diag(probs,truth))
+}
+summarize_all(diags,mean)
+```
+
+*For a 10-fold CV with the same logistic regression model, the AUC is 0.815, which is slightly greater than the AUC of 0.811 of the original model. Sensitivity of the 10-fold model is slightly less than the initial model. All other diagnostics are slight greater than the initial model. Overall, the out-of-sample metrics deviate slightly, but the AUC value indicates the model does not show signs of overfitting and is good at predicting admission status on data outside of the sample.*
+
+```{R}
+#LASSO
+
+LSy<-as.matrix(LS2$BinaryAdmit) 
+LSx<-model.matrix(BinaryAdmit~.,data=LS2)[,-1]
+LSx <- scale(LSx)
+LScv <- cv.glmnet(LSx,LSy, family="binomial")
+LSlasso<-glmnet(LSx,LSy,family="binomial",lambda=LScv$lambda.1se)
+coef(LSlasso)
+
+LS3 <- LS2 %>% mutate(Black=ifelse(LS2$Race=="Black",1,0),Hispanic=ifelse(LS2$Race=="Hispanic",1,0),Female=ifelse(LS2$Gender=="female",1,0), Resident =ifelse(LS2$resident=="Yes",1,0),Asian=ifelse(LS2$Race=="Asian",1,0))
+
+#CROSS-VALIDATION
+k=10
+
+LS3data<-LS3[sample(nrow(LS3)),] 
+folds<-cut(seq(1:nrow(LS3)),breaks=k,labels=F) 
+
+diags<-NULL
+for(i in 1:k){
+  train<-LS3data[folds!=i,] 
+  test<-LS3data[folds==i,]
+  truth<-test$BinaryAdmit
+  
+  LS3fit<-glm(BinaryAdmit~LSAT+GPA+Black+Hispanic+Resident,data=train,family="binomial")
+  
+  probs<-predict(LS3fit,newdata = test,type="response")
+  
+  diags<-rbind(diags,class_diag(probs,truth))
+}
+
+diags%>%summarize_all(mean)
+```
+
+*After performing LASSO on the logistic regression model, all variables were deemed predictive of admission status except for RaceWhite and Gendermale. After performing a 10-fold CV on LASSO variables, the resulting AUC is 0.810 which is slightly less than the initial logistic regression AUC 0.811 and the same as the non-LASSO, 10-fold CV regression model.*
+
+...

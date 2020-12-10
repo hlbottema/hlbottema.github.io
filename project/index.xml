@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Projects on Hanna Bottema</title>
+    <link>/project/</link>
+    <description>Recent content in Projects on Hanna Bottema</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en-US</language><atom:link href="/project/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Project 1: Exploratory Data Analysis</title>
+      <link>/project/project1/</link>
+      <pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate>
+      
+      <guid>/project/project1/</guid>
+      <description>Introduction The purpose of this project is to compare movies based on their qualitative and quantitative variables. The dataset &amp;quot;MovieRatings&amp;quot; was acquired from the Internet Movie Database (IMDb) and contains the variables company, country, name, rating, runtime, score, votes, and year for 6,820 different films. The dataset &amp;quot;MovieBudget&amp;quot; was drawn from the Kaggle dataset &amp;quot;The Movies Dataset&amp;quot;. The author compiled budget, original_title, revenue, runtime, status, and title information from TMDB and GroupLens for 45,466 distinct movies.</description>
+    </item>
+    
+    <item>
+      <title>Project 2: Modeling, Testing, and Predicting</title>
+      <link>/project/project2/</link>
+      <pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate>
+      
+      <guid>/project/project2/</guid>
+      <description>library(readr) library(dplyr) library(ggplot2) library(rstatix) library(sandwich) library(lmtest) library(plotROC) library(glmnet) class_diag&amp;lt;-function(probs,truth){ tab&amp;lt;-table(factor(probs&amp;gt;.5,levels=c(&amp;quot;FALSE&amp;quot;,&amp;quot;TRUE&amp;quot;)),truth) acc=sum(diag(tab))/sum(tab) sens=tab[2,2]/colSums(tab)[2] spec=tab[1,1]/colSums(tab)[1] ppv=tab[2,2]/rowSums(tab)[2] f1=2*(sens*ppv)/(sens+ppv) if(is.numeric(truth)==FALSE &amp;amp; is.logical(truth)==FALSE){ truth&amp;lt;-as.numeric(truth)-1} #CALCULATE EXACT AUC ord&amp;lt;-order(probs, decreasing=TRUE) probs &amp;lt;- probs[ord]; truth &amp;lt;- truth[ord] TPR=cumsum(truth)/max(1,sum(truth)) FPR=cumsum(!truth)/max(1,sum(!truth)) dup&amp;lt;-c(probs[-1]&amp;gt;=probs[-length(probs)], FALSE) TPR&amp;lt;-c(0,TPR[!dup],1); FPR&amp;lt;-c(0,FPR[!dup],1) n &amp;lt;- length(TPR) auc&amp;lt;- sum( ((TPR[-1]+TPR[-n])/2) * (FPR[-1]-FPR[-n]) ) data.frame(acc,sens,spec,ppv,f1,auc) } lawschool &amp;lt;- read_csv(&amp;quot;lawschool.csv&amp;quot;) head(lawschool) ## # A tibble: 6 x 8 ## LSAT GPA Race resident college Year Gender admit ## &amp;lt;dbl&amp;gt; &amp;lt;dbl&amp;gt; &amp;lt;chr&amp;gt; &amp;lt;dbl&amp;gt; &amp;lt;chr&amp;gt; &amp;lt;dbl&amp;gt; &amp;lt;dbl&amp;gt; &amp;lt;dbl&amp;gt; ## 1 156 3.</description>
+    </item>
+    
+  </channel>
+</rss>

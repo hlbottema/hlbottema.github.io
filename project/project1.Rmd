@@ -1,0 +1,181 @@
+---
+title: 'Project 1: Exploratory Data Analysis'
+author: "Hanna Bottema (hb9828)"
+date: '10/18/2020'
+output:
+  html_document:
+    toc: yes
+    toc_float:
+      collapsed: no
+      smooth_scroll: yes
+  pdf_document:
+    toc: no
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = TRUE, fig.align = "center", warning = F, message = F,
+tidy=TRUE, tidy.opts=list(width.cutoff=60), R.options=list(max.print=100))
+```
+
+### Introduction
+##### The purpose of this project is to compare movies based on their qualitative and quantitative variables. The dataset "MovieRatings" was acquired from the Internet Movie Database (IMDb) and contains the variables company, country, name, rating, runtime, score, votes, and year for 6,820 different films. The dataset "MovieBudget" was drawn from the Kaggle dataset "The Movies Dataset". The author compiled budget, original_title, revenue, runtime, status, and title information from TMDB and GroupLens for 45,466 distinct movies. 
+
+##### The datasets were chosen and compiled for analysis of budget and revenue in comparison to genre and ratings. Personally, I am an avid user of IMDb and am interested in how the aforementioned variables may be correlated to explain trends among types of movies. I hypothesize genres, such as Animation and Action, will yield higher budgets due to higher production costs. Furthermore, budget and revenue may demonstrate a relatively high correlation due to allocation of costs to marketing and subsequently greater viewership, yielding a higher revenue. Overall, the following analysis will aim to display relationships between quantitative variables and varying subsets of qualitative variables.
+
+### Joining
+```{R}
+library(tidyverse)
+library(readr)
+library(dplyr)
+library(ggplot2)
+options(scipen=99)
+
+MovieBudget <- read_csv("MovieBudget.csv")
+
+MovieRatings <- read_csv("MovieRatings.csv")
+
+MovieJoin <- MovieBudget %>% distinct(title, .keep_all = T) %>% rename(name = title) %>% right_join(MovieRatings, by = "name")
+
+MovieJoin2 <- MovieJoin %>% select(-runtime.x)
+MovieJoin2 <- MovieJoin2 %>% select(-status) 
+MovieJoin2 <- MovieJoin2 %>% select(- original_title)
+MovieJoin2 <- MovieJoin2 %>% na.omit 
+MovieJoin2 <- MovieJoin2 %>% select(- popularity)
+
+MovieJoin3 <- MovieJoin2 %>% filter(!revenue == 0 & !budget == 0)
+MovieJoin3 <- MovieJoin3 %>% filter(budget >= "1000")
+MovieJoin3 <- MovieJoin3 %>% filter(revenue >= "1000")
+
+'%ni%' <- Negate('%in%')
+MovieJoin3 %>% group_by(genre) %>% count() %>% arrange(n)
+GenreMJ <- MovieJoin3 %>% filter(genre %ni% c("Thriller" , "Family", "Romance", "Sci-Fi", "Fantasy", "Mystery"))
+```
+
+*I used a right-join to combine the MovieBudget and MovieRatings datasets into MovieJoin to preserve all variables. The MovieRatings dataset had significantly fewer observations, so I used a right-join by movie name to eliminate rows in MovieBudget that were not present in MovieRatings. The right-join eliminated 38,646 observations to form a combined dataset with 6,820 observations.*
+
+*After joining, I removed extraneous, repetitive variables along with rows containing NA values. I also removed movies with low revenue and budget values that were falsely reported-- for example, movies with budgets of 1 dollar. Lastly, I removed movies categorized into genres with small overall counts. The final dataset, GenreMJ, contains 3223 observation and 11 variables. The removal of observations limits the scope of the project analysis and is not representative of all movies on IMDb; however, these measures were taken to simplify important variables of study within this project: budget, revenue, and genre.* 
+
+### Wrangling
+```{R}
+GenreMJ %>% summarise_if(is.numeric, mean) 
+
+GenreMJ %>% summarise_if(is.numeric, sd) 
+```
+
+*The mean budget for movies in the dataset is 39,731,977 dollars, and the mean revenue is 116,100,005 dollars. The mean runtime is 109.362 minutes, and the mean user-given score is 6.478. The mean number of votes given by IMDb users for each movie is 118164.3, and the mean year in which movies were created is 2004.*
+
+*The standard deviation (sd) in budget for movies in the joined dataset is 43,231,380 dollars, and the sd in revenue is 186,534,215 dollars. The sd in runtime is 18.82 minutes, and the user-given scores have an sd of 0.995. The number of votes on IMDb for movies deviated by 166,121.7, and the years in which movies were created deviated by 8.30.*
+
+
+```{R}
+GenreMJ %>% filter(score == max(score)) %>% select(name)
+
+GenreMJ %>% group_by(genre) %>% summarise(mscore = mean(score)) %>% arrange(desc(mscore)) 
+
+GenreMJ %>% group_by(rating, country) %>% summarise(ms = mean(score)) %>% arrange(desc(ms))
+```
+*The movie with the highest score based on IMDb user votes was Shawshank Redemption, which a score of 9.3. When grouped by genre, Biographies has the highest mean score of 7.16, and Horror has the lowest mean score of 5.80. When grouped by both country and rating, Unrated movies from India have the highest mean score of 8.7, and PG-13 movies from South Korea have the lowest mean score of 3.6.*
+
+```{R}
+GenreMJ %>% group_by(genre) %>% summarise(mr = mean(revenue)) %>% arrange((mr)) 
+
+GenreMJ %>% mutate(net = revenue - budget) %>% filter(net == max(net)) %>% select(name)
+```
+
+*The movie genre with the greatest mean revenue is Animation and the lowest is Crime. The film with the greatest net profit, the difference between revenue and budget, is Avatar.*
+
+```{R}
+GenreMJ %>% select(country) %>% count(country) %>% arrange(desc(n)) 
+
+GenreMJ %>% group_by(genre) %>% summarise(mrt = mean(runtime.y)) %>% arrange(desc(mrt)) 
+
+GenreMJ %>% group_by(country) %>% summarise(mv = mean(votes)) %>% arrange(desc(mv)) 
+
+```
+
+*The most represented country in the dataset is the USA, which accounts for 2649 of the observations. Animation films have, on average, the lowest runtimes while Biographies have the highest mean runtime. When grouped by country, movies from New Zealand have the highest mean number of votes on IMDb.*
+
+### Pivoting
+```{R}
+GenreMJ %>% group_by(genre) %>% summarise_if(is.numeric, c(mean, sd, var, min, max)) %>% pivot_longer(contains("_")) %>% separate(name, sep = "_", into = c("variable", "summarystat")) %>% pivot_wider(names_from = "variable", values_from = "value") %>% mutate(summarystat = recode(summarystat, "fn1" = "mean", "fn2" = "sd", "fn3" = "var", "fn4" = "min", "fn5" = "max"))
+```
+*Pivoting was used to tidy summary statistics across different genres. First, the data was pivoted longer to combine row names into a single column. Once in a single column, the row names were separated into a variable column and a summary statistic column-- containing mean, sd, var, min, and max identifiers. Once separated, the variable column was pivoted wider to create columns that pertained to each-- a budget column, a revenue column, etc. The summary statistic column was then recoded to the correct summary statistic name instead of the identifier.*
+
+*The final organized data contains 3 rows per genre. Each row shows either mean, sd, var, min, or max values for each variable.*
+
+### Visualizing
+```{R}
+MJCor <- MovieJoin3 %>% na.omit %>% select_if(is.numeric)
+
+MJCorrelation <- MJCor %>% cor
+
+MJC <- MJCorrelation %>% as.data.frame() %>% rownames_to_column("var1") %>% pivot_longer(-1, names_to="var2", values_to="correlation")
+
+MJC %>% ggplot(aes(var1, var2, fill = correlation)) + geom_tile() + labs(x = "Variable 1", y = "Variable 2") + ggtitle("Correlation Plot of Numeric Variables in GenreMJ") + scale_fill_gradient2(high="dark green") + theme(plot.title = element_text(hjust = 0.5)) + geom_text(aes(label=round(correlation,2)),color = "black", size = 2)
+```
+
+*In the correlation heatmap, the highest correlation value between two different variables is 0.72 between budget and revenue. A higher budget corresponds to a higher revenue, according to the dataset. The lowest correlation value is between year and score, with a value of 0.03. This indicates the score given to a movie is not impacted by the year in which it was made.*
+
+```{R}
+options(scipen = 2)
+
+ggplot(GenreMJ, aes(budget, revenue, color = genre)) + scale_color_brewer(palette="Dark2") + ggtitle("Scatterplots of Budget versus Revenue Faceted by Genre") + labs(x = "Budget" , y = "Revenue") +
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5)) + geom_point(size = 0.1) +  facet_wrap(~genre) 
+```
+
+*All of the above plots demonstrate positive relationships in which movies with higher budgets have higher revenues. The least spread is shown by the Horror genre, and the most spread is present in the Action genre. The plots for Biography, Comedy, Crime, Drama, and Horror show insignificant deviation from the origin. In fact, many data points have higher budget values than revenue values which results in a negative profit. The Action movie plot has the highest revenue and budget values.*
+
+```{R}
+GenreMJ1 <- GenreMJ %>% mutate(net = revenue - budget)
+MeanScores <- GenreMJ1 %>% group_by(genre) %>% summarise(meanscore = mean(score),meannet=mean(net)) %>% mutate(meanscore = round(meanscore,2))
+
+ggplot(GenreMJ1, aes(x = genre, y=net, fill = genre))+
+  geom_bar(stat="summary", fun=mean, position = "dodge")+ scale_fill_brewer(palette="Spectral") +
+  theme(axis.text.x = element_text(angle=45, hjust=1),legend.position="none", plot.title = element_text(hjust = 0.5))+
+  scale_y_continuous(breaks = seq(0, 200000000, 25000000)) +
+  geom_text(data = MeanScores, aes(y = meannet, label = meanscore), vjust = 1.5) + 
+ggtitle("Average Net Profit by Genre and Mean Score") + labs(x = "Genre", y = "Net Profit")
+```
+*Animation films have the greatest average net profit, and Crime movies have the smallest average net profit. According to the plot, the average score of each genre is not indicative of greater average net profit. The highest average score belongs to Biography movies; however, this genre has a low net profit. Genres with higher net profits-- Action, Adventure, and Animation -- have scores that are close to the mean of all movies in the dataset.*
+
+### PAM Clustering - Numeric Variables
+```{R}
+MJNum <- GenreMJ %>% select(budget, revenue, runtime.y, score)
+library(cluster)
+
+MJsil_width<-vector()
+
+for(i in 2:10){  
+  kms <- kmeans(MJNum,centers=i) 
+  sil <- silhouette(kms$cluster,dist(MJNum)) 
+  MJsil_width[i]<- mean(sil[,3])
+  }
+  
+ggplot()+geom_line(aes(x=1:10,y=MJsil_width))+scale_x_continuous(name="k",breaks=1:10) + ggtitle("K versus Average Silhouette Widths") + theme(plot.title = element_text(hjust = 0.5)) + labs(x = "K Values", y = "Average Silhouette Widths")
+```
+*The subset MJNum contains all numeric variables, except for year, that will be used for PAM clustering. Silhouettes are measurements used to determine how well values fit into clusters and to estimate cluster distances. The graph represents cluster options on the x-axis and silhouette widths on the y-axis. A larger sil_width is indicative of better clustering; therefore, 2 clusters should be used for the subsequent analysis.*
+
+```{R}
+MJPam <- MJNum %>% scale() %>% pam(k=2)
+
+MJpamclust<- MJNum%>%mutate(cluster=as.factor(MJPam$clustering))
+MJpamclust%>%group_by(cluster)%>%summarize_if(is.numeric,mean,na.rm=T)
+
+MJpamclust%>%ggplot(aes(x=budget,y=revenue,color=cluster))+geom_point() + ggtitle("Scatterplot of Budget and Revenue Colored by Cluster") + theme(plot.title = element_text(hjust = 0.5)) + labs(x = "Budget", y = "Revenue")
+```
+
+*Pam Clustering is shown above to divide the numeric variables into two clusters. When clustering is added as a variable and used to group, it is apparent by the means of the numeric variables that cluster 1 represent higher means of budget, revenue, runtime, and score. When visualized as a scatterplot, the clustering division is not apparent.*
+
+
+```{R}
+library(GGally)
+MJNum %>% mutate(cluster=as.factor(MJPam$clustering)) %>% 
+ggpairs(columns = c("budget","revenue","runtime.y","score"), aes(color=cluster))
+```
+
+*Based on the correlation values above, budget and revenue have the highest, positive correlation value of 0.723. Every other combination of variables have positive correlation values, but the values are insignificant and less than 0.5.* 
+
+```{R}
+MJPam$silinfo$avg.width
+```
+*The average silhouette width is 0.279 which is intepreted as a weak structure that could be artificial. Therefore, the final fit of the cluster solution does not properly separate the data.*
