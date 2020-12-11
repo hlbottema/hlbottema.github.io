@@ -60,7 +60,7 @@
  
 <div class="blog-title">
           <h4>
-         January 1, 0001 
+         November 25, 2020 
             &nbsp;&nbsp;
             
           </h4>
@@ -155,9 +155,9 @@ LS_samp&lt;-LS%&gt;%sample_n(4999)
 group &lt;- LS_samp$Race 
 DVs &lt;- LS_samp %&gt;% select(LSAT,GPA)
 sapply(split(DVs,group), mshapiro_test)</code></pre>
-<pre><code>##           Asian       Black     Hispanic  White       
-## statistic 0.9923673   0.9975165 0.9974485 0.9913578   
-## p.value   0.004324142 0.7122528 0.8155908 7.302301e-14</code></pre>
+<pre><code>##           Asian     Black     Hispanic  White       
+## statistic 0.9975175 0.9945782 0.995756  0.9843502   
+## p.value   0.5150727 0.0864433 0.3760175 2.512437e-19</code></pre>
 <p><em>When testing for normality within each group, all racial identifications had p-values less than 0.05; therefore, the multivariate normality assumption is not satisfied.</em></p>
 <pre class="r"><code>#TESTS
 LSmanova &lt;- manova(cbind(LSAT,GPA)~Race,data=LS)
