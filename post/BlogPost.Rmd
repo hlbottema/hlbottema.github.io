@@ -31,4 +31,4 @@ re.findall(r"GC[AG][AT]TG|A[AGT]TAAT", string5)
 >Essentially, RegEx is a powerful, yet initially troublesome, search tool that can be used to match criteria in an efficient manner. I am excited to put RegEx to use in future analysis of data I am currently collecting and organizing for a research project. For now, enjoy this meme: 
 
 
-![](meme.jpg)
+![](https://miro.medium.com/max/1200/1*ZVlIZ1ZYC6rASz-dYPzhZQ.jpeg)
