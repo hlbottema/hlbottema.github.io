@@ -3,7 +3,7 @@ title: "Practical Applications of RegEx"
 author: "Hanna Bottema"
 date: 2020-12-09
 categories: ["R"]
-tags: ["R Markdown", "RegEx", "applications"]
+tags: ["R Markdown", "RegEx", "Applications"]
 ---
 
 ```{r setup, include=FALSE}
@@ -18,7 +18,6 @@ knitr::opts_chunk$set(collapse = TRUE)
 
 ```{R}
 library(reticulate)
-library(shiny)
 ```
 
 ```{python}
@@ -31,7 +30,5 @@ re.findall(r"GC[AG][AT]TG|A[AGT]TAAT", string5)
 
 >Essentially, RegEx is a powerful, yet initially troublesome, search tool that can be used to match criteria in an efficient manner. I am excited to put RegEx to use in future analysis of data I am currently collecting and organizing for a research project. For now, enjoy this meme: 
 
-```{r, echo=FALSE}
-library(knitr)
-knitr::include_graphics("regexmeme.jpeg")
-```
+
+![](meme.jpg)
